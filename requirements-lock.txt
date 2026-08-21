@@ -1,0 +1,71 @@
+# M-A Splitter v0.2 — pinned dependency lock (verified on Python 3.13.13).
+# Stack: numpy 2.x + numba 0.65 + demucs 4.0.1 + librosa 0.11 + torch 2.6.
+# NOTE: torch/torchaudio are NOT here — install.py selects the CUDA/CPU build
+# per detected hardware. basic-pitch is installed separately with --no-deps
+# (its metadata pins numpy<2 / a TensorFlow build with no wheel; it actually
+# runs fine on numpy 2.x via the ONNX backend), so its runtime deps that would
+# otherwise come transitively (mir_eval, resampy, scikit-learn, pretty_midi,
+# librosa, scipy) are listed explicitly below.
+antlr4-python3-runtime==4.9.3
+audioop-lts==0.2.2
+audioread==3.1.0
+certifi==2026.5.20
+cffi==2.0.0
+charset-normalizer==3.4.7
+cloudpickle==3.1.2
+colorama==0.4.6
+decorator==5.3.1
+demucs==4.0.1
+dora_search==0.1.12
+einops==0.8.2
+filelock==3.29.0
+flatbuffers==25.12.19
+fsspec==2026.4.0
+idna==3.17
+imageio-ffmpeg==0.6.0
+importlib_resources==7.1.0
+Jinja2==3.1.6
+joblib==1.5.3
+julius==0.2.7
+lameenc==1.8.2
+lazy-loader==0.5
+librosa==0.11.0
+llvmlite==0.47.0
+MarkupSafe==3.0.3
+mido==1.3.3
+mir_eval==0.8.2
+mpmath==1.3.0
+msgpack==1.1.2
+networkx==3.6.1
+numba==0.65.1
+numpy==2.2.6
+omegaconf==2.3.0
+onnxruntime==1.26.0
+openunmix==1.3.0
+packaging==26.2
+platformdirs==4.10.0
+pooch==1.9.0
+pretty_midi==0.2.11
+protobuf==7.35.0
+pycparser==3.0
+PyYAML==6.0.3
+requests==2.34.2
+resampy==0.4.3
+retrying==1.4.2
+scikit-learn==1.8.0
+scipy==1.17.1
+six==1.17.0
+soundfile==0.13.1
+soxr==1.1.0
+torchlibrosa==0.1.0
+matplotlib==3.10.9
+standard-aifc==3.13.0
+standard-chunk==3.13.0
+standard-sunau==3.13.0
+submitit==1.5.4
+sympy==1.13.1
+threadpoolctl==3.6.0
+tqdm==4.67.3
+treetable==0.2.6
+typing_extensions==4.15.0
+urllib3==2.7.0

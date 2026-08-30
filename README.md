@@ -25,6 +25,32 @@ Maintained by Maslodium.
 - Python 3.12 recommended.
 - NVIDIA GPU is optional, but strongly recommended for Demucs.
 
+## Installers
+
+Current release:
+
+```text
+https://github.com/Maslodium/m-a-splitter/releases/tag/v0.3.0
+```
+
+Windows:
+
+```text
+Install-M-A-Splitter.exe
+```
+
+macOS:
+
+```text
+M-A-Splitter-macOS.zip
+```
+
+Linux:
+
+```text
+M-A-Splitter-linux.tar.gz
+```
+
 ## Run From Source
 
 ```powershell
@@ -86,8 +112,35 @@ M-A означает MIDI-AUDIO. Программа разделяет ауди�
 ## Требования
 
 - Windows 10/11.
+- macOS/Linux сборки экспериментальные.
 - Рекомендуется Python 3.12.
 - NVIDIA GPU не обязателен, но сильно ускоряет Demucs.
+
+## Установщики
+
+Текущий релиз:
+
+```text
+https://github.com/Maslodium/m-a-splitter/releases/tag/v0.3.0
+```
+
+Windows:
+
+```text
+Install-M-A-Splitter.exe
+```
+
+macOS:
+
+```text
+M-A-Splitter-macOS.zip
+```
+
+Linux:
+
+```text
+M-A-Splitter-linux.tar.gz
+```
 
 ## Запуск из исходников
 

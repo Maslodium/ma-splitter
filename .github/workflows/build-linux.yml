@@ -1,0 +1,40 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "requirements-lock.txt"
+      - "build_linux.sh"
+      - ".github/workflows/build-linux.yml"
+      - "assets/**"
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system audio libraries
+        run: sudo apt-get update && sudo apt-get install -y libsndfile1 ffmpeg python3-tk
+
+      - name: Smoke tests
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python install.py
+          .venv/bin/python -m py_compile pipeline.py gui.py drum_transcribe.py stereo_split.py installer/bootstrap_installer_linux.py
+          .venv/bin/python -m unittest discover -s tests
+
+      - name: Build Linux archive
+        run: bash build_linux.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: M-A-Splitter-linux
+          path: dist/M-A-Splitter-linux.tar.gz

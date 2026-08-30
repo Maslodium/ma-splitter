@@ -4,6 +4,9 @@ __pycache__/
 venv/
 input/
 output/
+build/
+dist/
+payload/
 gui_settings.json
 *.log
 *.wav

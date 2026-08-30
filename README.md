@@ -21,6 +21,7 @@ Maintained by Maslodium.
 ## Requirements
 
 - Windows 10/11.
+- macOS/Linux builds are experimental.
 - Python 3.12 recommended.
 - NVIDIA GPU is optional, but strongly recommended for Demucs.
 

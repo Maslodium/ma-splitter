@@ -1,0 +1,37 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "requirements-lock.txt"
+      - "build_macos.sh"
+      - ".github/workflows/build-macos.yml"
+      - "assets/**"
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Smoke tests
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python install.py
+          .venv/bin/python -m py_compile pipeline.py gui.py drum_transcribe.py stereo_split.py installer/bootstrap_installer_macos.py
+          .venv/bin/python -m unittest discover -s tests
+
+      - name: Build macOS installer app
+        run: bash build_macos.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: M-A-Splitter-macOS
+          path: dist/M-A-Splitter-macOS.zip

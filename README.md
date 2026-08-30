@@ -1,5 +1,7 @@
 # M-A Splitter
 
+Author: Maslodium
+
 MIDI-AUDIO Splitter is a local desktop tool for offline audio stem separation
 and draft MIDI extraction.
 
@@ -71,6 +73,8 @@ Check upstream model/code licenses before redistributing pretrained weights or
 commercial bundles.
 
 ## Русское Описание
+
+Автор: Maslodium
 
 **M-A Splitter** расшифровывается как **MIDI-AUDIO Splitter**. Это локальная
 программа для разделения аудио на стемы и чернового извлечения MIDI.

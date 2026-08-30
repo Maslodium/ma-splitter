@@ -1,33 +1,31 @@
 # M-A Splitter
 
-Author: Maslodium
+Desktop audio stem splitter and draft MIDI extraction tool.
 
-MIDI-AUDIO Splitter is a local desktop tool for offline audio stem separation
-and draft MIDI extraction.
-
-```text
-audio file -> instrument stems -> adaptive MIDI transcription
-```
+M-A means MIDI-AUDIO. The tool separates an audio file into instrument stems and
+exports draft MIDI parts for further editing in a DAW.
 
 The interface was rebuilt as a dark cyber-metal rack: custom title bar,
-brushed-metal section rails, non-system control colors, dark work panels,
-Oxanium display font and cyan/magenta accent lines.
+brushed-metal section rails, dark work panels, non-system control colors,
+Oxanium display font and cyan/magenta accents.
+
+Maintained by Maslodium.
 
 ## Features
 
-- Separates audio into stems with Demucs.
-- Exports per-part draft MIDI for bass, vocals, guitar, piano and other stems.
+- Stem separation through Demucs.
+- Draft MIDI export for bass, vocals, guitar, piano and other stems.
 - Optional WAV stem export beside the MIDI files.
-- Adaptive MIDI path:
-  - analyzes loudness, spectral flatness, onset density and harmonic/percussive
-    balance;
-  - prepares private helper WAVs with bandpass, harmonic emphasis and adaptive
-    noise gate;
-  - can auto-pick pYIN, Basic Pitch or piano transcription paths;
-  - applies smart MIDI cleanup for tiny gaps, octave ghosts and isolated specks.
-- Drum detector can export GM percussion MIDI.
-- Stereo field split helper can separate hard-panned material before MIDI
-  extraction.
+- Adaptive MIDI mode with stem analysis, helper-WAV preprocessing and smart
+  cleanup.
+- Drum detector for GM percussion MIDI.
+- Stereo field split helper for hard-panned material.
+
+## Requirements
+
+- Windows 10/11.
+- Python 3.12 recommended.
+- NVIDIA GPU is optional, but strongly recommended for Demucs.
 
 ## Run From Source
 
@@ -38,71 +36,80 @@ py -3.12 -m venv .venv
 ```
 
 `install.py` installs the pinned runtime stack and then installs Basic Pitch
-without its legacy TensorFlow dependency chain. Torch and torchaudio are pinned
-as a matching `2.6.0` pair in `requirements-lock.txt`.
+without its legacy TensorFlow dependency chain.
 
-## MIDI Notes
-
-MIDI extraction is intentionally treated as a draft assistant, not a finished
-score. The adaptive pass improves thresholds and cleanup, but timing,
-polyphony, note choice and drums may still need manual editing in a DAW.
-
-For A/B comparisons:
+## CLI
 
 ```powershell
+python pipeline.py song.wav -o output
 python pipeline.py song.wav --no-adaptive-midi
 python pipeline.py song.wav --no-midi-preprocess
 python pipeline.py song.wav --no-smart-clean
 ```
 
-## Roadmap
+## Notes
 
-- Better note grouping for guitar and vocal bends.
-- Confidence-based MIDI event coloring/export metadata.
-- Per-stem noise reduction before transcription.
-- Local model experiments for MIDI transcription where frequency heuristics and
-  Basic Pitch disagree.
-- Batch processing and project presets.
+MIDI extraction is a draft assistant, not a finished score. Timing, polyphony,
+note choice and drums may still need manual editing after export.
 
-## Licenses
-
-- Demucs is used for source separation.
-- Oxanium is bundled under the SIL Open Font License 1.1.
+Useful next improvements are better guitar/vocal bends, confidence metadata,
+per-stem denoise before MIDI and batch processing.
 
 Check upstream model/code licenses before redistributing pretrained weights or
 commercial bundles.
 
-## Русское Описание
+---
 
-Автор: Maslodium
+# M-A Splitter
 
-**M-A Splitter** расшифровывается как **MIDI-AUDIO Splitter**. Это локальная
-программа для разделения аудио на стемы и чернового извлечения MIDI.
+Настольная утилита для разделения аудио на стемы и чернового извлечения MIDI.
 
-Интерфейс переработан в стиле тёмного cyber-metal rack: собственная верхняя
-панель окна, металлические полосы разделов, не системные цвета кнопок и рамок,
-тёмные рабочие области, шрифт Oxanium и киберпанк-акценты.
+M-A означает MIDI-AUDIO. Программа разделяет аудиофайл на инструментальные
+стемы и экспортирует черновые MIDI-партии для дальнейшей правки в DAW.
+
+Интерфейс переработан в тёмный cyber-metal rack: собственная верхняя панель
+окна, металлические полосы разделов, тёмные рабочие панели, не системные цвета
+контролов, шрифт Oxanium и cyan/magenta акценты.
+
+Поддерживает Maslodium.
 
 ## Возможности
 
-- Разделение аудио на стемы через Demucs.
-- Черновой MIDI-экспорт по партиям: бас, вокал, гитара, пианино и другие
-  дорожки.
-- Сохранение WAV-стемов рядом с MIDI.
-- Адаптивный MIDI-режим:
-  - анализирует громкость, шумность, плотность атак и harmonic/percussive
-    баланс;
-  - готовит helper-WAV с фильтрацией, harmonic emphasis и noise gate;
-  - выбирает pYIN, Basic Pitch или piano path по характеру стема;
-  - чистит MIDI от мелкого мусора, октавных призраков и коротких дыр.
-- Детектор барабанов может экспортировать GM percussion MIDI.
-- Stereo field split помогает разделять сильно разведённые по панораме партии.
+- Разделение стемов через Demucs.
+- Черновой MIDI-экспорт для баса, вокала, гитары, пианино и других стемов.
+- Опциональное сохранение WAV-стемов рядом с MIDI.
+- Adaptive MIDI mode: анализ стема, helper-WAV preprocessing и smart cleanup.
+- Детектор барабанов для GM percussion MIDI.
+- Stereo field split для сильно разведённого по панораме материала.
 
-## Что Добавить Дальше
+## Требования
 
-- Более умное склеивание нот для гитары и вокальных глайдов.
-- Экспорт уверенности распознавания нот для ручной правки в DAW.
-- Предварительный denoise отдельных стемов перед MIDI.
-- Локальные модели MIDI-транскрипции для спорных мест, где частотный анализ и
-  Basic Pitch расходятся.
-- Пакетная обработка и пресеты проектов.
+- Windows 10/11.
+- Рекомендуется Python 3.12.
+- NVIDIA GPU не обязателен, но сильно ускоряет Demucs.
+
+## Запуск из исходников
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe install.py
+.\.venv\Scripts\pythonw.exe gui.py
+```
+
+## CLI
+
+```powershell
+python pipeline.py song.wav -o output
+python pipeline.py song.wav --no-adaptive-midi
+python pipeline.py song.wav --no-midi-preprocess
+python pipeline.py song.wav --no-smart-clean
+```
+
+## Примечания
+
+MIDI-экспорт нужно воспринимать как черновой помощник, а не как готовую
+партитуру. Тайминг, полифония, выбор нот и барабаны могут требовать ручной
+правки после экспорта.
+
+Полезные следующие улучшения: гитарные/вокальные бенды, confidence metadata,
+denoise стемов перед MIDI и пакетная обработка.

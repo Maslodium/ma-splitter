@@ -5,10 +5,6 @@ Desktop audio stem splitter and draft MIDI extraction tool.
 M-A means MIDI-AUDIO. The tool separates an audio file into instrument stems and
 exports draft MIDI parts for further editing in a DAW.
 
-The interface was rebuilt as a dark cyber-metal rack: custom title bar,
-brushed-metal section rails, dark work panels, non-system control colors,
-Oxanium display font and cyan/magenta accents.
-
 Maintained by Maslodium.
 
 ## Features
@@ -20,6 +16,7 @@ Maintained by Maslodium.
   cleanup.
 - Drum detector for GM percussion MIDI.
 - Stereo field split helper for hard-panned material.
+- Key-aware MIDI filtering and octave-ghost cleanup.
 
 ## Requirements
 
@@ -47,13 +44,19 @@ python pipeline.py song.wav --no-midi-preprocess
 python pipeline.py song.wav --no-smart-clean
 ```
 
+## Possible Improvements
+
+- Better note grouping for guitar bends and vocal slides.
+- Confidence metadata for MIDI events.
+- Per-stem denoise before MIDI transcription.
+- Local MIDI model experiments for cases where frequency analysis and Basic
+  Pitch disagree.
+- Batch processing for folders.
+
 ## Notes
 
 MIDI extraction is a draft assistant, not a finished score. Timing, polyphony,
 note choice and drums may still need manual editing after export.
-
-Useful next improvements are better guitar/vocal bends, confidence metadata,
-per-stem denoise before MIDI and batch processing.
 
 Check upstream model/code licenses before redistributing pretrained weights or
 commercial bundles.
@@ -67,10 +70,6 @@ commercial bundles.
 M-A означает MIDI-AUDIO. Программа разделяет аудиофайл на инструментальные
 стемы и экспортирует черновые MIDI-партии для дальнейшей правки в DAW.
 
-Интерфейс переработан в тёмный cyber-metal rack: собственная верхняя панель
-окна, металлические полосы разделов, тёмные рабочие панели, не системные цвета
-контролов, шрифт Oxanium и cyan/magenta акценты.
-
 Поддерживает Maslodium.
 
 ## Возможности
@@ -81,6 +80,7 @@ M-A означает MIDI-AUDIO. Программа разделяет ауди�
 - Adaptive MIDI mode: анализ стема, helper-WAV preprocessing и smart cleanup.
 - Детектор барабанов для GM percussion MIDI.
 - Stereo field split для сильно разведённого по панораме материала.
+- Фильтрация MIDI по тональности и очистка октавных призраков.
 
 ## Требования
 
@@ -105,11 +105,20 @@ python pipeline.py song.wav --no-midi-preprocess
 python pipeline.py song.wav --no-smart-clean
 ```
 
+## Возможные Доработки
+
+- Более точное склеивание нот для гитарных бендов и вокальных глайдов.
+- Confidence metadata для MIDI-событий.
+- Denoise отдельных стемов перед MIDI-транскрипцией.
+- Эксперименты с локальной MIDI-моделью для случаев, где частотный анализ и
+  Basic Pitch расходятся.
+- Пакетная обработка папок.
+
 ## Примечания
 
 MIDI-экспорт нужно воспринимать как черновой помощник, а не как готовую
 партитуру. Тайминг, полифония, выбор нот и барабаны могут требовать ручной
 правки после экспорта.
 
-Полезные следующие улучшения: гитарные/вокальные бенды, confidence metadata,
-denoise стемов перед MIDI и пакетная обработка.
+Перед распространением весов моделей или коммерческой сборкой нужно отдельно
+проверить лицензии upstream-проектов.

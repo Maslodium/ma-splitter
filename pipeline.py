@@ -544,6 +544,138 @@ PART_PROFILES = {
 DEFAULT_PROFILE = {"min_freq": None, "max_freq": None, "onset": 0.5, "frame": 0.3, "min_len_ms": 80}
 
 
+def analyze_stem(wav: Path) -> dict:
+    """Measure a stem before transcription so thresholds can follow the audio."""
+    import librosa
+    import numpy as np
+
+    y, sr = librosa.load(str(wav), sr=22050, mono=True)
+    if y.size == 0:
+        return {"duration": 0.0, "rms": 0.0, "peak": 0.0, "flatness": 1.0,
+                "onset_density": 0.0, "harmonic_ratio": 0.0, "centroid": 0.0}
+
+    rms = float(np.sqrt(np.mean(y ** 2)))
+    peak = float(np.max(np.abs(y)))
+    flatness = float(np.mean(librosa.feature.spectral_flatness(y=y)))
+    centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=512)
+    onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr, hop_length=512)
+    duration = float(y.size / sr)
+    harmonic, percussive = librosa.effects.hpss(y)
+    h_rms = float(np.sqrt(np.mean(harmonic ** 2)))
+    p_rms = float(np.sqrt(np.mean(percussive ** 2)))
+    return {
+        "duration": duration,
+        "rms": rms,
+        "peak": peak,
+        "flatness": flatness,
+        "onset_density": float(len(onsets) / max(duration, 0.001)),
+        "harmonic_ratio": float(h_rms / (h_rms + p_rms + 1e-9)),
+        "centroid": centroid,
+    }
+
+
+def choose_adaptive_profile(part: str, base: dict, metrics: dict) -> dict:
+    """Tune Basic Pitch/pYIN thresholds from stem measurements."""
+    p = dict(base)
+    dense = metrics.get("onset_density", 0.0) > 5.0
+    noisy = metrics.get("flatness", 0.0) > 0.12
+    percussive = metrics.get("harmonic_ratio", 1.0) < 0.45
+    quiet = metrics.get("rms", 0.0) < 0.015
+
+    if dense or noisy:
+        p["onset"] = min(0.82, float(p["onset"]) + 0.08)
+        p["frame"] = min(0.78, float(p["frame"]) + 0.06)
+        p["min_len_ms"] = max(float(p["min_len_ms"]), 110)
+    if percussive and part in {"guitar", "other", "piano"}:
+        p["onset"] = min(0.88, float(p["onset"]) + 0.06)
+        p["min_len_ms"] = max(float(p["min_len_ms"]), 130)
+    if quiet:
+        p["onset"] = max(0.35, float(p["onset"]) - 0.06)
+        p["frame"] = max(0.22, float(p["frame"]) - 0.04)
+    if part == "bass":
+        p["max_freq"] = min(float(p.get("max_freq") or 420), 420)
+        p["min_len_ms"] = max(float(p["min_len_ms"]), 140)
+    if part == "vocals" and noisy:
+        p["max_freq"] = min(float(p.get("max_freq") or 1200), 1200)
+    return p
+
+
+def choose_adaptive_engine(part: str, user_mono: bool, piano_engine: str,
+                           metrics: dict) -> tuple[object, str]:
+    """Pick the least-wrong local transcriber for this stem."""
+    if user_mono:
+        return transcribe_stem_mono, "pYIN-mono"
+    if part == "piano" and piano_engine == "onsets-frames":
+        return transcribe_stem_piano_of, "onsets-frames"
+
+    monoline = (
+        part in {"bass", "vocals"}
+        and metrics.get("harmonic_ratio", 0.0) > 0.58
+        and metrics.get("flatness", 1.0) < 0.08
+        and metrics.get("onset_density", 99.0) < 4.0
+    )
+    if monoline:
+        return transcribe_stem_mono, "pYIN-auto"
+    return transcribe_stem, "basic-pitch"
+
+
+def preprocess_stem_for_midi(wav: Path, out_wav: Path, part: str,
+                             profile: dict, metrics: dict) -> Path:
+    """Make a cleaner analysis signal for transcription without replacing stems.
+
+    The saved audition stem remains the Demucs output. This creates a private
+    mono helper WAV for the MIDI engine: instrument bandpass, gentle harmonic
+    emphasis and an adaptive noise gate.
+    """
+    import librosa
+    import numpy as np
+    import scipy.signal as sps
+    import soundfile as sf
+
+    y, sr = librosa.load(str(wav), sr=44100, mono=True)
+    if y.size == 0:
+        return wav
+
+    lo = profile.get("min_freq")
+    hi = profile.get("max_freq")
+    ny = sr / 2
+    try:
+        if lo and hi and hi < ny:
+            sos = sps.butter(4, [float(lo) / ny, float(hi) / ny], btype="bandpass", output="sos")
+            y = sps.sosfiltfilt(sos, y)
+        elif lo:
+            sos = sps.butter(4, float(lo) / ny, btype="highpass", output="sos")
+            y = sps.sosfiltfilt(sos, y)
+        elif hi and hi < ny:
+            sos = sps.butter(4, float(hi) / ny, btype="lowpass", output="sos")
+            y = sps.sosfiltfilt(sos, y)
+    except ValueError:
+        pass
+
+    if part != "bass" and metrics.get("harmonic_ratio", 0.5) < 0.75:
+        harmonic, percussive = librosa.effects.hpss(y)
+        y = harmonic + 0.18 * percussive
+
+    frame = 2048
+    hop = 512
+    rms = librosa.feature.rms(y=y, frame_length=frame, hop_length=hop, center=True)[0]
+    if rms.size:
+        floor = float(np.percentile(rms, 25))
+        gate = max(floor * 1.8, 1e-5)
+        gain_frames = np.clip((rms - gate) / (gate * 1.5 + 1e-9), 0.18, 1.0)
+        idx = np.minimum(np.arange(y.size) // hop, gain_frames.size - 1)
+        y = y * gain_frames[idx]
+
+    peak = float(np.max(np.abs(y)))
+    if peak > 0:
+        y = 0.92 * y / peak
+
+    out_wav.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(str(out_wav), y.astype(np.float32), sr)
+    return out_wav
+
+
 def transcribe_stem(wav: Path, midi_path: Path, profile: dict | None = None) -> int:
     """Transcribe one stem to a single .mid file, return the note count.
 
@@ -796,23 +928,89 @@ def clean_midi(midi_path: Path, drop_octave_ghosts: bool = True,
                         kill.add(id(m))
 
     if max_polyphony and max_polyphony > 0:
-        # sample timeline; where more than max are active, drop shortest extras
+        # Sample the timeline, keeping an incremental active-note window. The
+        # old version rebuilt active notes by scanning the whole file at every
+        # grid tick, which became very slow on dense transcription output.
         import numpy as np
 
         end = pm.get_end_time()
         grid = np.arange(0, end, 0.05)
+        by_start = sorted(notes, key=lambda n: n.start)
+        active: list = []
+        start_i = 0
         for t in grid:
-            active = [n for n in notes if id(n) not in kill
-                      and n.start <= t < n.end]
+            while start_i < len(by_start) and by_start[start_i].start <= t:
+                active.append(by_start[start_i])
+                start_i += 1
+            active = [n for n in active if id(n) not in kill and t < n.end]
             if len(active) > max_polyphony:
-                active.sort(key=lambda n: (n.end - n.start))  # shortest first
-                for n in active[:len(active) - max_polyphony]:
+                ranked = sorted(active, key=lambda n: (n.end - n.start))  # shortest first
+                for n in ranked[:len(active) - max_polyphony]:
                     kill.add(id(n))
 
     for inst in pm.instruments:
         inst.notes = [n for n in inst.notes if id(n) not in kill]
     pm.write(str(midi_path))
     return total - len(kill), len(kill)
+
+
+def clean_midi_smart(midi_path: Path, part: str, profile: dict,
+                     metrics: dict | None = None) -> dict:
+    """Second-pass musical cleanup after the generic clutter remover.
+
+    This pass is deliberately conservative: merge tiny same-pitch gaps, remove
+    very short quiet notes, and suppress isolated short blips. It avoids key or
+    scale assumptions so it works on metal riffs, chromatic runs and modal parts.
+    """
+    import pretty_midi
+
+    pm = pretty_midi.PrettyMIDI(str(midi_path))
+    total_before = sum(len(inst.notes) for inst in pm.instruments)
+    if total_before == 0:
+        return {"before": 0, "after": 0, "removed": 0, "merged": 0}
+
+    min_len = float(profile.get("min_len_ms") or 80) / 1000.0
+    gap = 0.045 if part in {"bass", "vocals"} else 0.03
+    quiet_velocity = 34 if part in {"bass", "piano"} else 28
+    isolated_gap = 0.16
+    merged_count = 0
+    removed_count = 0
+
+    for inst in pm.instruments:
+        if inst.is_drum:
+            continue
+        notes = sorted(inst.notes, key=lambda n: (n.pitch, n.start, n.end))
+        merged = []
+        for note in notes:
+            if merged and note.pitch == merged[-1].pitch and 0 <= note.start - merged[-1].end <= gap:
+                merged[-1].end = max(merged[-1].end, note.end)
+                merged[-1].velocity = max(merged[-1].velocity, note.velocity)
+                merged_count += 1
+            else:
+                merged.append(note)
+
+        timeline = sorted(merged, key=lambda n: (n.start, n.pitch))
+        keep = []
+        for i, note in enumerate(timeline):
+            dur = note.end - note.start
+            prev_gap = note.start - timeline[i - 1].end if i > 0 else 999.0
+            next_gap = timeline[i + 1].start - note.end if i + 1 < len(timeline) else 999.0
+            is_quiet_speck = dur < min_len * 0.75 and note.velocity <= quiet_velocity
+            is_isolated_speck = dur < min_len * 0.55 and prev_gap > isolated_gap and next_gap > isolated_gap
+            if is_quiet_speck or is_isolated_speck:
+                removed_count += 1
+                continue
+            keep.append(note)
+        inst.notes = sorted(keep, key=lambda n: (n.start, n.pitch))
+
+    pm.write(str(midi_path))
+    total_after = sum(len(inst.notes) for inst in pm.instruments)
+    return {
+        "before": total_before,
+        "after": total_after,
+        "removed": removed_count + max(0, total_before - total_after - removed_count),
+        "merged": merged_count,
+    }
 
 
 def main() -> int:
@@ -864,6 +1062,18 @@ def main() -> int:
                     help="override frame threshold for all parts (0..1, higher=fewer notes)")
     ap.add_argument("--min-note-ms", type=float, default=None,
                     help="override minimum note length in ms for all parts")
+    ap.add_argument("--adaptive-midi", dest="adaptive_midi", action="store_true", default=True,
+                    help="analyze each stem and adapt MIDI thresholds/engine choice (default on)")
+    ap.add_argument("--no-adaptive-midi", dest="adaptive_midi", action="store_false",
+                    help="use static transcription profiles")
+    ap.add_argument("--midi-preprocess", dest="midi_preprocess", action="store_true", default=True,
+                    help="write a cleaned helper WAV before melodic transcription (default on)")
+    ap.add_argument("--no-midi-preprocess", dest="midi_preprocess", action="store_false",
+                    help="send raw Demucs stems directly to the MIDI engine")
+    ap.add_argument("--smart-clean", dest="smart_clean", action="store_true", default=True,
+                    help="merge gaps and remove quiet/isolated MIDI specks after transcription")
+    ap.add_argument("--no-smart-clean", dest="smart_clean", action="store_false",
+                    help="disable the second-pass smart MIDI cleanup")
     ap.add_argument("--freq-bounds", default="per-part", choices=["per-part", "off"],
                     help="per-part = use instrument frequency bands (default); "
                          "off = no frequency filtering")
@@ -938,6 +1148,7 @@ def main() -> int:
 
     midi_root = args.out / args.audio.stem
     audio_root = midi_root / "audio"
+    work_root = midi_root / "_midi_work"
     if args.save_audio:
         audio_root.mkdir(parents=True, exist_ok=True)
 
@@ -969,8 +1180,12 @@ def main() -> int:
             produced.append(name)
             continue
 
-        # Build this part's profile: per-part defaults, then global overrides.
+        # Build this part's profile: per-part defaults, adaptive tuning, then
+        # explicit user overrides. User knobs always win.
+        metrics = analyze_stem(wav) if args.adaptive_midi else {}
         profile = dict(PART_PROFILES.get(name, DEFAULT_PROFILE))
+        if args.adaptive_midi:
+            profile = choose_adaptive_profile(name, profile, metrics)
         if args.freq_bounds == "off":
             profile["min_freq"] = None
             profile["max_freq"] = None
@@ -982,18 +1197,30 @@ def main() -> int:
             profile["min_len_ms"] = args.min_note_ms
 
         fb = "off" if profile["min_freq"] is None else f"{profile['min_freq']}-{profile['max_freq']}Hz"
+        if args.adaptive_midi:
+            print(f"[analyze] {name:7s} rms={metrics.get('rms', 0):.4f}, "
+                  f"flat={metrics.get('flatness', 0):.3f}, "
+                  f"onsets/s={metrics.get('onset_density', 0):.2f}, "
+                  f"harm={metrics.get('harmonic_ratio', 0):.2f}")
 
         # Pick the transcription engine for this stem:
         #   mono (--mono-stems) -> pYIN single-line
         #   piano + onsets-frames -> piano-specific O&F model
         #   else -> polyphonic basic-pitch
         use_mono = name in mono_stems
-        if use_mono:
+        if args.adaptive_midi:
+            engine, eng_name = choose_adaptive_engine(name, use_mono, args.piano_engine, metrics)
+        elif use_mono:
             engine, eng_name = transcribe_stem_mono, "pYIN-mono"
         elif name == "piano" and args.piano_engine == "onsets-frames":
             engine, eng_name = transcribe_stem_piano_of, "onsets-frames"
         else:
             engine, eng_name = transcribe_stem, "basic-pitch"
+
+        tx_wav = wav
+        if args.midi_preprocess and args.adaptive_midi:
+            tx_wav = preprocess_stem_for_midi(wav, work_root / f"{name}.prep.wav",
+                                              name, profile, metrics)
 
         # Stereo split: this stem becomes two parts (e.g. left/right guitar).
         if name in split_stems:
@@ -1005,7 +1232,7 @@ def main() -> int:
             sinfo = split_stereo(wav, a_wav, b_wav, method=args.split_method)
             if not sinfo.get("stereo"):
                 print(f"[split] {name} is mono — cannot split, transcribing whole")
-                n_notes = engine(wav, midi_root / f"{name}.mid", profile)
+                n_notes = engine(tx_wav, midi_root / f"{name}.mid", profile)
                 print(f"           -> {n_notes} notes")
                 produced.append(name)
                 continue
@@ -1013,8 +1240,21 @@ def main() -> int:
             print(f"[split] {name} -> two parts via {args.split_method} ({eng_name})")
             tmp_a = midi_root / f"{name}_A.mid"
             tmp_b = midi_root / f"{name}_B.mid"
-            na = engine(a_wav, tmp_a, profile)
-            nb = engine(b_wav, tmp_b, profile)
+            a_profile = profile
+            b_profile = profile
+            a_tx = a_wav
+            b_tx = b_wav
+            if args.midi_preprocess and args.adaptive_midi:
+                a_metrics = analyze_stem(a_wav)
+                b_metrics = analyze_stem(b_wav)
+                a_profile = choose_adaptive_profile(name, profile, a_metrics)
+                b_profile = choose_adaptive_profile(name, profile, b_metrics)
+                a_tx = preprocess_stem_for_midi(a_wav, work_root / f"{name}_A.prep.wav",
+                                                name, a_profile, a_metrics)
+                b_tx = preprocess_stem_for_midi(b_wav, work_root / f"{name}_B.prep.wav",
+                                                name, b_profile, b_metrics)
+            na = engine(a_tx, tmp_a, a_profile)
+            nb = engine(b_tx, tmp_b, b_profile)
 
             # Decide names by the chosen naming scheme.
             if args.split_naming == "LR":
@@ -1038,12 +1278,12 @@ def main() -> int:
               f"(onset={profile['onset']}, frame={profile['frame']}, "
               f"min_len={profile['min_len_ms']}ms, band={fb}) ...")
         midi_path = midi_root / f"{name}.mid"
-        n_notes = engine(wav, midi_path, profile)
+        n_notes = engine(tx_wav, midi_path, profile)
         print(f"           -> {n_notes} notes")
         produced.append(name)
 
-    # ---- MIDI cleanup (octave ghosts / polyphony cap) ----
-    if (args.clean_octaves or args.max_polyphony) and produced:
+    # ---- MIDI cleanup (octave ghosts / polyphony cap / smart speck filter) ----
+    if (args.clean_octaves or args.max_polyphony or args.smart_clean) and produced:
         print("\n[clean] removing transcription clutter from melodic parts")
         for p in produced:
             if p == "drums":
@@ -1051,10 +1291,21 @@ def main() -> int:
             mp = midi_root / f"{p}.mid"
             if not mp.is_file():
                 continue
-            kept, removed = clean_midi(mp, drop_octave_ghosts=args.clean_octaves,
-                                       max_polyphony=args.max_polyphony)
-            if removed:
-                print(f"  {p:8s} removed {removed}, kept {kept}")
+            if args.clean_octaves or args.max_polyphony:
+                kept, removed = clean_midi(mp, drop_octave_ghosts=args.clean_octaves,
+                                           max_polyphony=args.max_polyphony)
+                if removed:
+                    print(f"  {p:8s} removed {removed}, kept {kept}")
+            if args.smart_clean:
+                base_part = p.split("_", 1)[0]
+                stats = clean_midi_smart(
+                    mp,
+                    base_part,
+                    PART_PROFILES.get(base_part, DEFAULT_PROFILE),
+                )
+                if stats["removed"] or stats["merged"]:
+                    print(f"  {p:8s} smart removed {stats['removed']}, "
+                          f"merged {stats['merged']}, kept {stats['after']}")
 
     # ---- Key-aware filtering (post-process MIDI) ----
     if args.key_filter != "off" and produced:

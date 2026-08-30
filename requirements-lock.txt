@@ -1,13 +1,12 @@
-# M-A Splitter v0.2 — pinned dependency lock (verified on Python 3.13.13).
+# M-A Splitter v0.2 — pinned dependency lock (verified on Python 3.12/3.13).
 # Stack: numpy 2.x + numba 0.65 + demucs 4.0.1 + librosa 0.11 + torch 2.6.
-# NOTE: torch/torchaudio are NOT here — install.py selects the CUDA/CPU build
-# per detected hardware. basic-pitch is installed separately with --no-deps
+# basic-pitch is installed separately with --no-deps by install.py
 # (its metadata pins numpy<2 / a TensorFlow build with no wheel; it actually
 # runs fine on numpy 2.x via the ONNX backend), so its runtime deps that would
 # otherwise come transitively (mir_eval, resampy, scikit-learn, pretty_midi,
 # librosa, scipy) are listed explicitly below.
 antlr4-python3-runtime==4.9.3
-audioop-lts==0.2.2
+audioop-lts==0.2.2; python_version >= "3.13"
 audioread==3.1.0
 certifi==2026.5.20
 cffi==2.0.0
@@ -59,12 +58,14 @@ soundfile==0.13.1
 soxr==1.1.0
 torchlibrosa==0.1.0
 matplotlib==3.10.9
-standard-aifc==3.13.0
-standard-chunk==3.13.0
-standard-sunau==3.13.0
+standard-aifc==3.13.0; python_version >= "3.13"
+standard-chunk==3.13.0; python_version >= "3.13"
+standard-sunau==3.13.0; python_version >= "3.13"
 submitit==1.5.4
 sympy==1.13.1
 threadpoolctl==3.6.0
+torch==2.6.0
+torchaudio==2.6.0
 tqdm==4.67.3
 treetable==0.2.6
 typing_extensions==4.15.0

@@ -1,111 +1,104 @@
 # M-A Splitter
 
-Offline audio splitter and MIDI transcription tool for Windows.
-
-The current pipeline is:
-
-```text
-audio file -> instrument stems -> per-part MIDI
-```
-
-It combines stem separation with MIDI transcription paths for melodic parts, piano and drums.
-
-Maintained by Maslodium.
-
-## Status
-
-This is an early work-in-progress build. Stem separation is usable, but MIDI recognition is still experimental: timing, note choice, polyphony and drum detection may need manual cleanup after export.
-
-The project is published as a practical starting point for musicians, developers and audio experimenters who want to test it, improve the recognition logic, or adapt the pipeline to their own material.
-
-## Quick Start
-
-The repository includes the current Windows installer:
+MIDI-AUDIO Splitter is a local desktop tool for offline audio stem separation
+and draft MIDI extraction.
 
 ```text
-Install M-A Splitter.exe
+audio file -> instrument stems -> adaptive MIDI transcription
 ```
 
-After installation, run `M-A Splitter.bat` or start the GUI from the installed project folder.
+The interface was rebuilt as a dark cyber-metal rack: custom title bar,
+brushed-metal section rails, non-system control colors, dark work panels,
+Oxanium display font and cyan/magenta accent lines.
+
+## Features
+
+- Separates audio into stems with Demucs.
+- Exports per-part draft MIDI for bass, vocals, guitar, piano and other stems.
+- Optional WAV stem export beside the MIDI files.
+- Adaptive MIDI path:
+  - analyzes loudness, spectral flatness, onset density and harmonic/percussive
+    balance;
+  - prepares private helper WAVs with bandpass, harmonic emphasis and adaptive
+    noise gate;
+  - can auto-pick pYIN, Basic Pitch or piano transcription paths;
+  - applies smart MIDI cleanup for tiny gaps, octave ghosts and isolated specks.
+- Drum detector can export GM percussion MIDI.
+- Stereo field split helper can separate hard-panned material before MIDI
+  extraction.
 
 ## Run From Source
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe install.py
 .\.venv\Scripts\pythonw.exe gui.py
 ```
 
-Torch/torchaudio may need a hardware-specific install command for CUDA or CPU builds. The installer handles that automatically; source setup may need manual adjustment.
+`install.py` installs the pinned runtime stack and then installs Basic Pitch
+without its legacy TensorFlow dependency chain. Torch and torchaudio are pinned
+as a matching `2.6.0` pair in `requirements-lock.txt`.
 
-## Project Layout
+## MIDI Notes
 
-- `gui.py` - Tkinter desktop interface.
-- `pipeline.py` - audio separation and MIDI export pipeline.
-- `drum_transcribe.py` - onset-based drum transcription.
-- `stereo_split.py` - stereo panorama split helper.
-- `requirements-lock.txt` - pinned Python dependency set.
-- `Install M-A Splitter.exe` - current Windows installer build.
+MIDI extraction is intentionally treated as a draft assistant, not a finished
+score. The adaptive pass improves thresholds and cleanup, but timing,
+polyphony, note choice and drums may still need manual editing in a DAW.
 
-## Notes
-
-- Settings are saved in `gui_settings.json` when the app runs.
-- Generated `input/`, `output/`, model caches and virtual environments are intentionally ignored.
-- MIDI output should be treated as a starting point for editing, not as a finished score.
-
----
-
-# M-A Splitter
-
-Оффлайн-инструмент для разделения аудио и черновой MIDI-транскрипции под Windows.
-
-Текущий пайплайн:
-
-```text
-аудиофайл -> инструментальные дорожки -> MIDI по партиям
-```
-
-Он объединяет разделение на stems и отдельные пути MIDI-транскрипции для мелодических партий, пианино и ударных.
-
-Поддерживает Maslodium.
-
-## Статус
-
-Это ранняя рабочая версия. Разделение дорожек уже можно использовать, но распознавание MIDI пока экспериментальное: тайминг, выбор нот, полифония и определение ударных могут требовать ручной чистки после экспорта.
-
-Проект опубликован как практическая стартовая точка для музыкантов, разработчиков и аудио-экспериментаторов, которые хотят протестировать инструмент, улучшить распознавание или адаптировать пайплайн под свой материал.
-
-## Быстрый старт
-
-В репозитории есть текущий Windows-инсталлятор:
-
-```text
-Install M-A Splitter.exe
-```
-
-После установки запустите `M-A Splitter.bat` или GUI из установленной папки проекта.
-
-## Запуск из исходников
+For A/B comparisons:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
-.\.venv\Scripts\pythonw.exe gui.py
+python pipeline.py song.wav --no-adaptive-midi
+python pipeline.py song.wav --no-midi-preprocess
+python pipeline.py song.wav --no-smart-clean
 ```
 
-Для Torch/torchaudio может понадобиться команда установки под конкретное железо: CUDA или CPU. Инсталлятор делает это автоматически, а при запуске из исходников иногда нужна ручная настройка.
+## Roadmap
 
-## Структура проекта
+- Better note grouping for guitar and vocal bends.
+- Confidence-based MIDI event coloring/export metadata.
+- Per-stem noise reduction before transcription.
+- Local model experiments for MIDI transcription where frequency heuristics and
+  Basic Pitch disagree.
+- Batch processing and project presets.
 
-- `gui.py` - desktop-интерфейс на Tkinter.
-- `pipeline.py` - пайплайн разделения аудио и экспорта MIDI.
-- `drum_transcribe.py` - транскрипция ударных по onset-событиям.
-- `stereo_split.py` - вспомогательный split по стереопанораме.
-- `requirements-lock.txt` - зафиксированный набор Python-зависимостей.
-- `Install M-A Splitter.exe` - текущая сборка Windows-инсталлятора.
+## Licenses
 
-## Заметки
+- Demucs is used for source separation.
+- Oxanium is bundled under the SIL Open Font License 1.1.
 
-- Настройки сохраняются в `gui_settings.json` при запуске приложения.
-- Сгенерированные `input/`, `output/`, кэши моделей и виртуальные окружения специально игнорируются.
-- MIDI-результат стоит воспринимать как черновик для дальнейшего редактирования, а не как готовую партитуру.
+Check upstream model/code licenses before redistributing pretrained weights or
+commercial bundles.
+
+## Русское Описание
+
+**M-A Splitter** расшифровывается как **MIDI-AUDIO Splitter**. Это локальная
+программа для разделения аудио на стемы и чернового извлечения MIDI.
+
+Интерфейс переработан в стиле тёмного cyber-metal rack: собственная верхняя
+панель окна, металлические полосы разделов, не системные цвета кнопок и рамок,
+тёмные рабочие области, шрифт Oxanium и киберпанк-акценты.
+
+## Возможности
+
+- Разделение аудио на стемы через Demucs.
+- Черновой MIDI-экспорт по партиям: бас, вокал, гитара, пианино и другие
+  дорожки.
+- Сохранение WAV-стемов рядом с MIDI.
+- Адаптивный MIDI-режим:
+  - анализирует громкость, шумность, плотность атак и harmonic/percussive
+    баланс;
+  - готовит helper-WAV с фильтрацией, harmonic emphasis и noise gate;
+  - выбирает pYIN, Basic Pitch или piano path по характеру стема;
+  - чистит MIDI от мелкого мусора, октавных призраков и коротких дыр.
+- Детектор барабанов может экспортировать GM percussion MIDI.
+- Stereo field split помогает разделять сильно разведённые по панораме партии.
+
+## Что Добавить Дальше
+
+- Более умное склеивание нот для гитары и вокальных глайдов.
+- Экспорт уверенности распознавания нот для ручной правки в DAW.
+- Предварительный denoise отдельных стемов перед MIDI.
+- Локальные модели MIDI-транскрипции для спорных мест, где частотный анализ и
+  Basic Pitch расходятся.
+- Пакетная обработка и пресеты проектов.

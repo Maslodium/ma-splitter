@@ -1013,6 +1013,122 @@ def clean_midi_smart(midi_path: Path, part: str, profile: dict,
     }
 
 
+def stabilize_note_midi(midi_path: Path, part: str) -> dict:
+    """Make MIDI easier to edit: clear notes with dependable durations.
+
+    This pass intentionally avoids adding new controls. It keeps the output close
+    to "note + duration": merge tiny same-pitch gaps, remove invalid fragments,
+    and enforce one active note for stems that should normally be monophonic.
+    """
+    import pretty_midi
+
+    pm = pretty_midi.PrettyMIDI(str(midi_path))
+    before = sum(len(inst.notes) for inst in pm.instruments)
+    if before == 0:
+        return {"before": 0, "after": 0, "removed": 0, "merged": 0, "trimmed": 0, "weak": 0}
+
+    base = part.split("_", 1)[0]
+    mono = base in {"bass", "vocals"}
+    min_len = {
+        "bass": 0.11,
+        "vocals": 0.09,
+        "guitar": 0.075,
+        "piano": 0.085,
+        "other": 0.08,
+    }.get(base, 0.08)
+    merge_gap = 0.055 if mono else 0.035
+    same_start_window = 0.035
+    merged_count = 0
+    trimmed_count = 0
+    weak_count = 0
+
+    for inst in pm.instruments:
+        if inst.is_drum:
+            continue
+        clean = []
+        for note in sorted(inst.notes, key=lambda n: (n.start, n.pitch, n.end)):
+            if note.end <= note.start:
+                continue
+            if (note.end - note.start) < min_len * 0.6:
+                continue
+            clean.append(note)
+
+        by_pitch = []
+        for note in sorted(clean, key=lambda n: (n.pitch, n.start, n.end)):
+            if by_pitch and note.pitch == by_pitch[-1].pitch and note.start - by_pitch[-1].end <= merge_gap:
+                by_pitch[-1].end = max(by_pitch[-1].end, note.end)
+                by_pitch[-1].velocity = max(by_pitch[-1].velocity, note.velocity)
+                merged_count += 1
+            else:
+                by_pitch.append(note)
+
+        timeline = sorted(by_pitch, key=lambda n: (n.start, n.end, n.pitch))
+        strong_velocity = max((n.velocity for n in timeline), default=0)
+        weak_velocity = max(24, int(strong_velocity * 0.58))
+        filtered = []
+        for i, note in enumerate(timeline):
+            dur = note.end - note.start
+            prev_gap = note.start - timeline[i - 1].end if i > 0 else 999.0
+            next_gap = timeline[i + 1].start - note.end if i + 1 < len(timeline) else 999.0
+            near_context = prev_gap < 0.12 or next_gap < 0.12
+            if dur < min_len * 1.25 and note.velocity <= weak_velocity and near_context:
+                weak_count += 1
+                continue
+            filtered.append(note)
+        timeline = filtered
+
+        if mono:
+            stable = []
+            for note in timeline:
+                if not stable:
+                    stable.append(note)
+                    continue
+                prev = stable[-1]
+                if note.start < prev.end:
+                    prev_score = (prev.end - prev.start, prev.velocity)
+                    note_score = (note.end - note.start, note.velocity)
+                    if abs(note.start - prev.start) <= same_start_window:
+                        if note_score > prev_score:
+                            stable[-1] = note
+                        continue
+                    if note_score > prev_score and (note.start - prev.start) < min_len:
+                        stable[-1] = note
+                        continue
+                    if note.start - prev.start >= min_len:
+                        prev.end = min(prev.end, note.start)
+                        trimmed_count += 1
+                        stable.append(note)
+                    elif note.end > prev.end:
+                        prev.end = note.end
+                        prev.velocity = max(prev.velocity, note.velocity)
+                        merged_count += 1
+                else:
+                    stable.append(note)
+            timeline = stable
+        else:
+            for i, note in enumerate(timeline[:-1]):
+                nxt = timeline[i + 1]
+                if note.pitch == nxt.pitch and nxt.start < note.end:
+                    note.end = max(note.start + min_len, min(note.end, nxt.start))
+                    trimmed_count += 1
+
+        inst.notes = [
+            n for n in sorted(timeline, key=lambda n: (n.start, n.pitch))
+            if (n.end - n.start) >= min_len
+        ]
+
+    pm.write(str(midi_path))
+    after = sum(len(inst.notes) for inst in pm.instruments)
+    return {
+        "before": before,
+        "after": after,
+        "removed": max(0, before - after),
+        "merged": merged_count,
+        "trimmed": trimmed_count,
+        "weak": weak_count,
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="audio -> stems -> MIDI per instrument part")
     ap.add_argument("audio", type=Path, help="input audio file (wav/mp3/flac/...)")
@@ -1306,6 +1422,13 @@ def main() -> int:
                 if stats["removed"] or stats["merged"]:
                     print(f"  {p:8s} smart removed {stats['removed']}, "
                           f"merged {stats['merged']}, kept {stats['after']}")
+                stable = stabilize_note_midi(mp, base_part)
+                if stable["removed"] or stable["merged"] or stable["trimmed"] or stable["weak"]:
+                    print(f"  {p:8s} stable removed {stable['removed']}, "
+                          f"merged {stable['merged']}, weak {stable['weak']}, "
+                          f"trimmed {stable['trimmed']}, "
+                          f"kept {stable['after']}")
+
 
     # ---- Key-aware filtering (post-process MIDI) ----
     if args.key_filter != "off" and produced:

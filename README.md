@@ -14,6 +14,7 @@ Maintained by Maslodium.
 - Optional WAV stem export beside the MIDI files.
 - Adaptive MIDI mode with stem analysis, helper-WAV preprocessing and smart
   cleanup.
+- Stable note cleanup for simpler note + duration MIDI output.
 - Drum detector for GM percussion MIDI.
 - Stereo field split helper for hard-panned material.
 - Key-aware MIDI filtering and octave-ghost cleanup.
@@ -73,7 +74,7 @@ python pipeline.py song.wav --no-smart-clean
 
 ## Possible Improvements
 
-- Better note grouping for guitar bends and vocal slides.
+- Better pitch-bend export for guitar bends and vocal slides.
 - Confidence metadata for MIDI events.
 - Per-stem denoise before MIDI transcription.
 - Local MIDI model experiments for cases where frequency analysis and Basic

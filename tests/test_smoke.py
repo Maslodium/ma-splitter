@@ -79,6 +79,45 @@ class PipelineSmokeTests(unittest.TestCase):
             self.assertEqual(len(notes), 1)
             self.assertAlmostEqual(notes[0].end, 0.45)
 
+    def test_stabilize_note_midi_merges_tiny_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            midi_path = Path(td) / "stable.mid"
+            pm = pretty_midi.PrettyMIDI()
+            inst = pretty_midi.Instrument(program=0)
+            inst.notes.append(pretty_midi.Note(velocity=70, pitch=60, start=0.0, end=0.20))
+            inst.notes.append(pretty_midi.Note(velocity=75, pitch=60, start=0.23, end=0.50))
+            pm.instruments.append(inst)
+            pm.write(str(midi_path))
+
+            stats = pipeline.stabilize_note_midi(midi_path, "guitar")
+
+            self.assertEqual(stats["merged"], 1)
+            cleaned = pretty_midi.PrettyMIDI(str(midi_path))
+            notes = cleaned.instruments[0].notes
+            self.assertEqual(len(notes), 1)
+            self.assertAlmostEqual(notes[0].start, 0.0)
+            self.assertAlmostEqual(notes[0].end, 0.50)
+
+    def test_stabilize_note_midi_keeps_bass_monophonic(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            midi_path = Path(td) / "bass.mid"
+            pm = pretty_midi.PrettyMIDI()
+            inst = pretty_midi.Instrument(program=0)
+            inst.notes.append(pretty_midi.Note(velocity=90, pitch=40, start=0.0, end=0.50))
+            inst.notes.append(pretty_midi.Note(velocity=35, pitch=47, start=0.20, end=0.30))
+            inst.notes.append(pretty_midi.Note(velocity=88, pitch=43, start=0.50, end=0.90))
+            pm.instruments.append(inst)
+            pm.write(str(midi_path))
+
+            stats = pipeline.stabilize_note_midi(midi_path, "bass")
+
+            cleaned = pretty_midi.PrettyMIDI(str(midi_path))
+            notes = cleaned.instruments[0].notes
+            self.assertEqual(stats["weak"], 1)
+            self.assertEqual(len(notes), 2)
+            self.assertEqual([n.pitch for n in notes], [40, 43])
+            self.assertLessEqual(notes[0].end, notes[1].start)
+
     def test_analyze_and_preprocess_stem_writes_helper_wav(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             wav = Path(td) / "sine.wav"
